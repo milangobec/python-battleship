@@ -1,71 +1,102 @@
-#Types of ships(size): carrier(5), battleship(4), cruiser(3), submarine(3), destroyer(2)
-class Ship:
-    def __init__(self, name, size, xpos, ypos, orientation):
-        self.name = name
-        self.size = size
-        self.xpos = xpos
-        self.ypos = ypos
-        self.orientation = orientation
-        self.coordinates = []
-    
-    #Calculates the coordinates of a given ship based on its starting coorinates, size, and orientation
-    def calculate_coordinates(self):
-        self.coordinates = []
-        for i in range(self.size):
-            if self.orientation == 'horizontal':
-                self.coordinates.append((self.xpos + i, self.ypos))
-            else:
-                self.coordinates.append((self.xpos, self.ypos + i))
-    
-class Board:
-    def __init__(self, width=10, height=10):
-        self.width = width
-        self.height = height
-        self.grid = [['~' for _ in range(width)] for _ in range(height)]
-        self.ships = []
-    
-    def calculcate_ship_positions(self, ship, xpos, ypos, orientation):
-        positions = []
-        for i in range(ship.size):
-            if ship.orientation == 'horizontal':
-                positions.append((xpos + i, ypos))
-            if ship.orientation == 'vertical':
-                positions.append((xpos, ypos + i))
-        return positions
-    
-    #checks to see whether a ship can be placed at a given position
-    def is_valid_position(self, ship, xpos, ypos, orientation):
-        if orientation == 'horizontal':
-            if xpos + ship.size > self.width:
-                raise ValueError("Ship cannot be placed horizontally here")
-            for i in range(ship.size):
-                if self.grid[ypos][xpos + i] != '~':
-                    raise ValueError("Ship cannot be placed here, position already occupied")
-        elif orientation == 'vertical':
-            if ypos + ship.size > self.height:
-                raise ValueError("Ship cannot be placed vertically here")
-            for i in range(ship.size):
-                if self.grid[ypos + i][xpos] != '~':
-                    raise ValueError("Ship cannot be placed here, position already occupied")
-        return True
-    
-    # Places a ship on the board if the position is valid
-    def place_ship(self, ship, xpos, ypos, orientation):
-        if self.is_valid_position(ship, xpos, ypos, orientation):
-            positions = self.calculcate_ship_positions(ship, xpos, ypos, orientation)
-            for x, y in positions:
-                self.grid[y][x] = ship.name[0].upper()
-            ship.positions = positions
-            self.ships.append(ship)
-    
-    def print_board(self):
-        for row in self.grid:
-            print(' '.join(row))
-        print()
+from ship import Ship
+from player import Player
+from board import Board
+from storage import PlayerDataManager, GameStorage
+from game import Game
+import uuid
 
-board = Board()
+#Types of ships(size): carrier(5), battleship(4), cruiser(3), submarine(3), destroyer(2)    
+def place_ships_for_player(player, available_ships):
+    available_ship_names = list(available_ships.keys())
+    placed_ships = []
+    auto_mode = False
+    board = player.board
+
+    for i in range(5):
+        while True:
+            print(f"\nPlacing ship {i + 1}:")
+            name = input("Enter ship name " + str(available_ship_names) + " or auto to auto-place ships: ").lower()
+            
+            if name == "auto":
+                auto_mode = True
+                for ship_name in available_ship_names:
+                    size = available_ships[ship_name]
+                    ship = Ship(ship_name, size, 0, 0, 'horizontal')
+                    board.auto_place_ship(ship)
+                    placed_ships.append(ship)
+                break
+
+            if name not in available_ship_names:
+                print(f"{name} is not a valid ship name. Please choose from {available_ship_names}.")
+                continue  
+
+            size = available_ships[name]
+
+            while True:
+                try:
+                    xpos = int(input("Enter ship x position (top-left corner, (1-10): ")) -1
+                    if xpos < 0 or xpos >= board.width:
+                        print("Invalid x position. Please enter a value between 1 and 10.")
+                        continue
+                    ypos = int(input("Enter ship y position (top-left corner, (1-10): ")) -1
+                    if ypos < 0 or ypos >= board.height:
+                        print("Invalid y position. Please enter a value between 1 and 10.")
+                        continue
+                    orientation = input("Enter ship orientation (horizontal/vertical): ")
+                    if orientation not in ['horizontal', 'vertical']:
+                        print("Invalid orientation. Please enter 'horizontal' or 'vertical'.")
+                        continue
+                    break
+                except ValueError:
+                    print("Invalid input. Please enter numeric values for positions.")
+                    
+            try:
+                ship = Ship(name, size, xpos, ypos, orientation)
+                board.place_ship(ship, xpos, ypos, orientation)
+                placed_ships.append(ship)
+                available_ships.pop(name, None)
+                available_ship_names.remove(name)
+                board.print_board()
+                break
+            except ValueError as e:
+                print(f"Error placing ship: {e}")
+                continue
+            
+        if auto_mode:
+            break
+    
+    if auto_mode:
+        print("\n")
+        board.print_board()
+        print("\n")
+    
+    return placed_ships
+
+def get_or_create_player(mgr, player_num):
+    while True:
+        prompt = f"Player {player_num}, enter your player ID (or leave blank to auto-generate): "
+        entered_id = input(prompt).strip()
+
+        if not entered_id:
+            new_id = str(uuid.uuid4())
+            name = input(f"Player {player_num}, enter your name: ").strip()
+            player = Player(name)
+            player.id = new_id
+            mgr.save_player(player)
+            print(f"Registered new player: {name} with ID {new_id}. Welcome to Battleship! Remeber your ID for future games.")
+            return player
+
+        if mgr.player_exists(entered_id):
+            player = mgr.get_player_profile(entered_id)
+            print(f"Welcome back, {player.name}! (ID: {entered_id} )")
+            return player
+
+        print("Player ID not found. Please try again or leave blank to auto-generate a new ID.")
 
 def main():
+    player_id_manager = PlayerDataManager()
+    game_storage = GameStorage()
+
     available_ships = {
         "carrier": 5,
         "battleship": 4,
@@ -73,52 +104,47 @@ def main():
         "submarine": 3,
         "destroyer": 2
     }
-    ship_names = list(available_ships.keys())
-    placed_ships = []
-    board = Board()
+    
+    save_prompt = input("Do you want to load a saved game? (yes/no): ").strip().lower()
+    if save_prompt == 'yes':
+        game_id = input("Enter the game ID to load: ").strip()
+        saved_game = game_storage.load_game(game_id)
+        if game_id in game_storage.data:
+            game, player1, player2, board1, board2 = saved_game
+            print(f"Loaded saved game with players {player1.name} and {player2.name}.")
+            player_id_manager.save_player(player1)
+            player_id_manager.save_player(player2)
+            while not game.game_over:
+                game.play_turn()
+            print("Game loaded successfully.")
+            print("Your game ID is: " + str(game_storage.id))
+            print(f"Current turn: {game.current_turn.name}")
+            return
+        else:
+            print("No saved game found. Starting a new game.")
 
-    for i in range(5):
-        while True:
-            print(f"\nPlacing ship {i + 1}:")
-            name = input("Enter ship name " + str(ship_names) + ": ").lower()
-            if name not in available_ships:
-                print("Invalid ship name. Please try again.")
-                continue
+    player1 = get_or_create_player(player_id_manager, 1)
+    player1.ships = place_ships_for_player(player1, available_ships.copy())
 
-            size = available_ships[name]
+    player2 = get_or_create_player(player_id_manager, 2)
+    player2.ships = place_ships_for_player(player2, available_ships.copy())
 
-            available_ships.pop(name, None)
-            ship_names.remove(name)
+    player_id_manager.save_player(player1)
+    player_id_manager.save_player(player2)
 
-            if any(ship.name == name for ship in placed_ships):
-                print(f"{name} has already been placed. Please choose a different ship.")
-                continue
+    game = Game(player1, player2)
 
-            while True:
-                xpos = int(input("Enter ship x position (top-left corner, (0-9): "))
-                if xpos < 0 or xpos >= board.width:
-                    print("Invalid x position. Please enter a value between 0 and 9.")
-                    continue
-                ypos = int(input("Enter ship y position (top-left corner, (0-9): "))
-                if ypos < 0 or ypos >= board.height:
-                    print("Invalid y position. Please enter a value between 0 and 9.")
-                    continue
-                orientation = input("Enter ship orientation (horizontal/vertical): ")
-                if orientation not in ['horizontal', 'vertical']:
-                    print("Invalid orientation. Please enter 'horizontal' or 'vertical'.")
-                    continue
-                break        
-            try:
-                ship = Ship(name, size, xpos, ypos, orientation)
-                ship.calculate_coordinates()
-                board.place_ship(ship, xpos, ypos, orientation)
-                placed_ships.append(ship)
-            except ValueError as e:
-                print(f"Error placing ship: {e}")
-                continue
-            
-            board.print_board()
-            break
+    while not game.game_over:
+        game.play_turn()
 
+    save_prompt = input("Do you want to save the game? (yes/no): ").strip().lower()
+    if save_prompt == 'yes':
+        new_game_id = game_storage.save_game(game, player1, player2, player1.board, player2.board)
+        print("Game saved successfully.")
+        print("Your game ID is: " + str(new_game_id))
+    else:
+        print("Game not saved.")
+    return
+    
 if __name__ == "__main__":
     main()

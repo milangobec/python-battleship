@@ -78,8 +78,18 @@ class GameStorage:
         with open(self.file_path, 'w') as file:
             json.dump(self.data, file, indent=4)
 
-    def save_game(self, game, player1, player2, board1, board2):
-        game_id = self.generate_game_id(player1.id, player2.id)
+    def save_game(self, game, player1, player2, board1, board2, game_id = None):
+        if not game_id:
+            game_id = self.id
+        if not game_id:
+            print("no game id provided, generating new one")
+            game_id = self.generate_game_id(player1.id, player2.id)
+        else:
+            if game_id in self.data:
+                print("game id exists in storage, overwriting save file...")
+            else:
+                print("game id doesnt exist in storage, creating new save file with this id")
+        self.id = game_id
         self.data[game_id] = {
             "player1": player1.to_dict_profile(),
             "board1": board1.to_dict_save(),
@@ -89,10 +99,10 @@ class GameStorage:
             "player2ships": [ship.to_dict_save() for ship in player2.ships],
             "turn_count": game.turn_count,
             "current_turn": game.current_turn.id,
-            "game_over": game.game_over
+            "game_over": game.game_over,
+            "game_id": game_id
         }
         self.save()
-        self.id = game_id
         return game_id
     
     def load_game(self, game_id):
@@ -111,8 +121,9 @@ class GameStorage:
             game = Game.from_dict({
                 "current_turn": raw['current_turn'],
                 "turn_count": raw['turn_count'],
-                "game_over": raw['game_over']
-            }, player1, player2)
+                "game_over": raw['game_over'],
+                "game_id": raw.get('game_id', game_id)
+            }, player1, player2, storage=self)
 
             return game, player1, player2, board1, board2
         return None, None, None, None

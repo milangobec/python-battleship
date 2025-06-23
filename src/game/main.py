@@ -106,45 +106,39 @@ def main():
     }
     
     save_prompt = input("Do you want to load a saved game? (yes/no): ").strip().lower()
+    
+    load_success = False
+    game = None
+
     if save_prompt == 'yes':
         game_id = input("Enter the game ID to load: ").strip()
         saved_game = game_storage.load_game(game_id)
-        if game_id in game_storage.data:
+        if game_id in game_storage.data and saved_game[0] is not None:
             game, player1, player2, board1, board2 = saved_game
             print(f"Loaded saved game with players {player1.name} and {player2.name}.")
+
             player_id_manager.save_player(player1)
             player_id_manager.save_player(player2)
-            while not game.game_over:
-                game.play_turn()
             print("Game loaded successfully.")
-            print("Your game ID is: " + str(game_storage.id))
-            print(f"Current turn: {game.current_turn.name}")
-            return
+            load_success = True
         else:
-            print("No saved game found. Starting a new game.")
+            print("No saved game found.")
 
-    player1 = get_or_create_player(player_id_manager, 1)
-    player1.ships = place_ships_for_player(player1, available_ships.copy())
+    if not load_success:
+        print("starting a new game...")
+        player1 = get_or_create_player(player_id_manager, 1)
+        player1.ships = place_ships_for_player(player1, available_ships.copy())
 
-    player2 = get_or_create_player(player_id_manager, 2)
-    player2.ships = place_ships_for_player(player2, available_ships.copy())
+        player2 = get_or_create_player(player_id_manager, 2)
+        player2.ships = place_ships_for_player(player2, available_ships.copy())
 
-    player_id_manager.save_player(player1)
-    player_id_manager.save_player(player2)
+        player_id_manager.save_player(player1)
+        player_id_manager.save_player(player2)
 
-    game = Game(player1, player2)
+        game = Game(player1, player2, storage=game_storage)
 
     while not game.game_over:
         game.play_turn()
-
-    save_prompt = input("Do you want to save the game? (yes/no): ").strip().lower()
-    if save_prompt == 'yes':
-        new_game_id = game_storage.save_game(game, player1, player2, player1.board, player2.board)
-        print("Game saved successfully.")
-        print("Your game ID is: " + str(new_game_id))
-    else:
-        print("Game not saved.")
-    return
     
 if __name__ == "__main__":
     main()

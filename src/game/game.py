@@ -7,11 +7,12 @@ board = Board
 player = Player
 
 class Game:
-    def __init__(self, player1, player2):
+    def __init__(self, player1, player2, storage=None):
         self.player1 = player1
         self.player2 = player2
         self.board1 = player1.board
         self.board2 = player2.board
+        self.storage = storage
 
         random_turn = random.randint(0, 1)
         if random_turn == 0:
@@ -67,14 +68,25 @@ class Game:
                     if save_prompt == 'yes':
                         print("saved game.")
                         mgr = PlayerDataManager()
-                        sotrage = GameStorage()
                         mgr.save_player(self.player1)
                         mgr.save_player(self.player2)
                         self.winner_name = self.check_winner()
-                        new_game_id = sotrage.save_game(self, self.player1, self.player2, self.board1, self.board2)
+
+                        current_game_id = getattr(self, "game_id", None)
+                        #print(f"[DEBUG] current game id before saving: {self.game_id}")
+
+                        if current_game_id:
+                            new_game_id = self.storage.save_game(self, self.player1, self.player2, self.board1, self.board2, game_id=current_game_id)
+                        else:
+                            new_game_id = self.storage.save_game(self, self.player1, self.player2, self.board1, self.board2)
+                            self.game_id = new_game_id
+
+                        #print(f"[DEBUG] game id after saving: {self.game_id}")
+
                         print(f"Game saved successfully with ID: {new_game_id}")
                         self.game_over = True
                         return
+                    
                     elif save_prompt == 'no':
                         print("did not save game.")
                         print("Continuing the game...")
@@ -132,16 +144,20 @@ class Game:
         return {
             "current_turn": self.current_turn.id,
             "game_over": self.game_over,
-            "turn_count": self.turn_count
+            "turn_count": self.turn_count,
+            "winner_name" : getattr(self, "winner_name", None),
+            "game_id": getattr(self, "game_id", None)
         }
         
     @classmethod
-    def from_dict(cls, data, player1, player2):
-        game = cls(player1, player2)
+    def from_dict(cls, data, player1, player2, storage = None):
+        game = cls(player1, player2, storage=storage)
         game.current_turn = player1 if data['current_turn'] == player1.id else player2
+        game.opponent = player2 if game.current_turn == player1 else player1
         game.game_over = data['game_over']
         game.turn_count = data['turn_count']
         game.winner_name = data.get('winner_name', None)
+        game.game_id = data.get('game_id')
         return game
 
         

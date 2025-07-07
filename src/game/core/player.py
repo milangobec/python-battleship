@@ -1,10 +1,9 @@
 import uuid
-from board import Board
+from .board import Board
 
 class Player:
-    def __init__(self, name, board=None):
-        self.id = str(uuid.uuid4())
-        
+    def __init__(self, name:str, id:str, board=None):
+        self.id = id
         if board is None:
             self.board = Board()
         else:
@@ -68,8 +67,13 @@ class Player:
         }
     
     @classmethod
+    def generate_player_id(cls):
+        id = str(uuid.uuid4())
+        return id
+    
+    @classmethod
     def from_dict_profile(cls, data):
-        player = cls(data['name'])
+        player = cls(data['name'], data['id'])
         player.id = data['id']
         player.hits = data['hits']
         player.misses = data['misses']

@@ -1,7 +1,8 @@
-from player import Player
-from board import Board
-from storage import PlayerDataManager, GameStorage
+from .player import Player
+from .board import Board
+from .storage import PlayerDataManager, GameStorage
 import random
+import time
 
 board = Board
 player = Player
@@ -37,7 +38,8 @@ class Game:
         if self.game_over:
             print("Game is already over.")
             return
-            
+
+        time.sleep(1)    
         print(f"{self.current_turn.name}'s turn. Here is {self.opponent.name}'s board...\n")
         self.opponent.board.print_masked_board()
         x, y = self.get_attack_coordinates()
@@ -45,6 +47,7 @@ class Game:
 
         try:
             result = self.opponent.board.recieve_attack(x, y)
+            time.sleep(1.5)
             if result == 'x':
                 print("Hit!\n")
                 self.current_turn.record_hit()
@@ -55,9 +58,6 @@ class Game:
                 print("Miss...\n")
                 self.current_turn.record_miss()
             if not self.game_over:
-                print("")
-                print(f"{self.opponent.name}'s board: ")
-                self.opponent.board.print_masked_board()
                 print("")
                 self.switch_turn()
                 self.turn_count += 1

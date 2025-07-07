@@ -84,6 +84,19 @@ class Board:
         for row in x:
             print(' '.join(row))
     
+    def to_dict(self):
+        return {
+            "width": self.width,
+            "height": self.height,
+            "grid": self.grid,
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        board = cls(data['width'], data['height'])
+        board.grid = data['grid']
+        return board
+    
     def to_dict_save(self):
         return {
             "width": self.width,

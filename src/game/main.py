@@ -1,9 +1,8 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from src.game.models import PlayerCreate, GameCreate, AttackRequest, LobbyCreate, LobbyJoin, ShipPlacement
-from src.game.core import Player, Board, Ship, Game, PlayerDataManager, GameStorage, LobbyStorage
+from .models import PlayerCreate, GameCreate, AttackRequest, LobbyCreate, LobbyJoin, ShipPlacement
+from .core import Player, Board, Ship, Game, PlayerDataManager, GameStorage, LobbyStorage
 import os,json, uuid
 from datetime import datetime
 
@@ -23,9 +22,6 @@ DATA_DIR = "data"
 os.makedirs(DATA_DIR, exist_ok=True)
 
 PLAYER_DATA_FILE = os.path.join(DATA_DIR, "player_data.json")
-
-# Mount static files (relative to project root)
-app.mount("/static", StaticFiles(directory="src/game/static"), name="static")
 
 if not os.path.exists(PLAYER_DATA_FILE):
     with open(PLAYER_DATA_FILE, "w") as f:
@@ -110,6 +106,21 @@ def list_lobbies():
 def join_lobby(lobby_id: str, join_data: LobbyJoin):
     lobby = lobby_storage.get_lobby(lobby_id)
     if not lobby:
+        for game_id, game_data in game_storage.data.items():
+            p1 = game_data.get('player1', {}).get('id')
+            p2 = game_data.get('player2', {}).get('id')
+            if join_data.player_id in [p1,p2]:
+                return {
+                    "game_created": True,
+                    "game_id": game_id,
+                    "player1": game_data["player1"],
+                    "player2": game_data["player2"],
+                    "current_turn": game_data['game'].get('current_turn'),
+                    "boards": {
+                        "player1_board": game_data['board1'],
+                        "player2_board": game_data['board2']
+                    }
+                }
         raise HTTPException(status_code=404, detail="Lobby not found")
     
     if len(lobby["players"]) >= 2:
@@ -164,28 +175,20 @@ def join_lobby(lobby_id: str, join_data: LobbyJoin):
 @app.post("/games/create")
 def create_game(game_data: GameCreate):
     player1 = load_player(game_data.player1_id)
+    if not player1:
+        player1 = Player(id=game_data.player1_id, name=game_data.player1_name)
+        save_player(player1)
     player2 = load_player(game_data.player2_id)
+    if not player2:
+        player2 = Player(id=game_data.player2_id, name=game_data.player2_id)
     
     if not player1 or not player2:
         return {"error": "One or both players not found"}
     
-    # Create new boards and place ships automatically
-    available_ships = {
-        "carrier": 5,
-        "battleship": 4,
-        "cruiser": 3,
-        "submarine": 3,
-        "destroyer": 2
-    }
-    
-    # Auto-place ships for both players
-    for ship_name, size in available_ships.items():
-        ship1 = Ship(ship_name, size, 0, 0, 'horizontal')
-        ship2 = Ship(ship_name, size, 0, 0, 'horizontal')
-        player1.board.auto_place_ship(ship1)
-        player2.board.auto_place_ship(ship2)
-        player1.ships.append(ship1)
-        player2.ships.append(ship2)
+    player1.board = Board()
+    player2.board = Board()
+    player1.ships = []
+    player2.ships = []
     
     # Create game
     game = Game(player1, player2, storage=game_storage)
@@ -254,6 +257,8 @@ def make_attack(game_id: str, attack_data: AttackRequest):
         if not game.game_over:
             game.switch_turn()
             game.turn_count += 1
+        else:
+            return {"message": "game Over!"}
         
         # Save updated game state
         game_storage.save_game(game, player1, player2, board1, board2, game_id)
@@ -325,4 +330,3 @@ def place_ship(game_id: str, placement_data: ShipPlacement):
         
     except ValueError as e:
         return {"error": str(e)}
-

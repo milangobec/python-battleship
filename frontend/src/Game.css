@@ -1,0 +1,152 @@
+.game-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.boards-container {
+    display: flex;
+    justify-content: space-around;
+    gap: 40px;
+    margin-top: 20px;
+}
+
+.board-section {
+    text-align: center;
+}
+
+.board-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 48px);
+    grid-template-rows: repeat(10, 48px);
+    gap: 0;
+    background-color: #f0f0f0;
+    border-radius: 5px;
+    border: none;
+    margin: 0 auto;
+    box-sizing: content-box;
+}
+
+.cell {
+    width: 48px;
+    height: 48px;
+    background-color: #87CEEB;
+    border: 1px solid #333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 16px;
+    cursor: default;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+.cell.ship {
+    color: white;
+    font-weight: bold;
+}
+
+.ship-selector {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border: 1px solid #dee2e6;
+}
+
+.ships-container {
+    display: flex;
+    gap: 10px;
+    margin: 15px 0;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.ship-item {
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    color: white;
+    font-weight: bold;
+    text-align: center;
+    min-width: 100px;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+}
+
+.ship-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.ship-item.selected {
+    border-color: #333;
+    transform: scale(1.05);
+}
+
+.ship-item:active {
+    transform: scale(0.95);
+}
+
+.game-status {
+    text-align: center;
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #e9ecef;
+    border-radius: 5px;
+    font-weight: bold;
+}
+
+.start-game-btn {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 5px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    margin: 20px auto;
+    display: block;
+    transition: background-color 0.2s ease;
+}
+
+.start-game-btn:hover {
+    background-color: #218838;
+}
+
+.start-game-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+    .boards-container {
+        flex-direction: column;
+        gap: 20px;
+    }
+    .cell {
+        width: 25px;
+        height: 25px;
+        font-size: 10px;
+    }
+    .ships-container {
+        flex-direction: column;
+        align-items: center;
+    }
+    .ship-item {
+        min-width: 150px;
+    }
+}
+
+.board-outer {
+    display: inline-block;
+    padding: 0;
+    border: 4px solid #222;
+    border-radius: 10px;
+    background: #e0e0e0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    margin: 0 auto;
+}

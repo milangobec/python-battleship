@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react';
+import Game from './Game'
 
 function Lobby() {
     const [lobbyName, setLobbyName] = useState('');
@@ -9,8 +10,12 @@ function Lobby() {
     const [error, setError] = useState(null)
     const [joiningLobby, setJoiningLobby] = useState(null);
     const [joinStatus, setJoinStatus] = useState(null);
+    const [currentGame, setCurrentGame] = useState(null);
+    const pollingInterval = useRef(null);
+    const [hostLobbyId, setHostLobbyId] = useState(null);
 
     const createLobby = async () => {
+        localStorage.removeItem("gameId"); // Clear old gameId before creating a new lobby
         const playerId = localStorage.getItem('playerId')
         if (!playerId) {
             alert("You must be logged in to create a lobby...");
@@ -32,12 +37,48 @@ function Lobby() {
         });
 
         const data = await res.json();
-        console.log("Lobby created: ", data);
 
         setLobbyName('');
         setShowLobbyInput(false);
         setShowLobbyList(false);
+        
+        if (data.lobby_id) {
+            setHostLobbyId(data.lobby_id);
+        }
     };
+
+    useEffect(() => {
+        const playerId = localStorage.getItem('playerId');
+        if (!hostLobbyId || !playerId) return;
+        if (pollingInterval.current) clearInterval(pollingInterval.current);
+        pollingInterval.current = setInterval(async () => {
+            try {
+                const res = await fetch(`/lobby/${hostLobbyId}/join`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ player_id: playerId })
+                });
+                const data = await res.json();
+                if (data.game_created) {
+                    setCurrentGame(data);
+                    localStorage.setItem("gameId", data.game_id);
+                    clearInterval(pollingInterval.current);
+                    setHostLobbyId(null);
+                }
+            } catch (err) {
+                // ignore errors during polling
+            }
+        }, 2000);
+        return () => {
+            if (pollingInterval.current) clearInterval(pollingInterval.current);
+        };
+    }, [hostLobbyId]);
+
+    useEffect(() => {
+        return () => {
+            if (pollingInterval.current) clearInterval(pollingInterval.current);
+        };
+    }, []);
 
     const listLobbies = async () => {
         setLoadingLobbies(true);
@@ -96,18 +137,29 @@ function Lobby() {
 
             if (data.game_created) {
                 setJoinStatus('Game created! Starting game...')
-                //navigate to game component
+                setCurrentGame(data);
+                localStorage.setItem("gameId", data.game_id);
+                setJoiningLobby(null);
                 setTimeout(() => {
-                    setJoinStatus('Game started successfully!');
-                    setJoiningLobby(null);
+                    listLobbies();
+                    setJoinStatus(null);
                 }, 2000);
             }
         }catch (err) {
             setError(err.message)
             setJoinStatus(null)
         } finally {
-            setJoiningLobby(null)
+            setJoiningLobby(null);
         }
+    };
+
+    const handleGameEnd = () => {
+        setCurrentGame(null);
+        setShowLobbyList(false);
+    };
+
+    if (currentGame) {
+        return <Game gameData={currentGame} onGameEnd={handleGameEnd} />;
     }
 
     return (

@@ -40,7 +40,9 @@ class Board:
             ship.orientation = orientation
             ship.coordinates = coords  # Use tuples
             self.ships.append(ship)
-    
+            print(f"[DEBUG] Placed ship {ship.name} at ({xpos},{ypos}) orientation {orientation}")
+            self.print_board()
+
     def auto_place_ship(self, ship):
         while True:
             xpos = random.randint(0, self.width - 1)
@@ -60,8 +62,12 @@ class Board:
             if (xpos, ypos) in ship.coordinates:
                 self.grid[ypos][xpos] = 'x'
                 ship.hits += 1
+                print(f"[DEBUG] Attack at ({xpos},{ypos}): HIT!")
+                self.print_board()
                 return 'x'
         self.grid[ypos][xpos] = 'o'
+        print(f"[DEBUG] Attack at ({xpos},{ypos}): MISS!")
+        self.print_board()
         return 'o'
 
     def all_ships_sunk(self):
@@ -102,14 +108,30 @@ class Board:
             "width": self.width,
             "height": self.height,
             "grid": self.grid,
+            "ships" : [ship.to_dict_save() for ship in self.ships]
         }
 
     @classmethod
     def from_dict_save(cls, data):
         board = cls(data['width'], data['height'])
         board.grid = data['grid']
+        from .ship import Ship
+        board.ships = [Ship.from_dict_save(s) for s in data.get('ships', [])]
         return board
     
     def print_board(self):
         for row in self.grid:
             print(' '.join(row))
+
+    def get_masked_board_api(self):
+        # Only show hits ('x') and misses ('o'), everything else is water ('~')
+        masked = []
+        for row in self.grid:
+            masked_row = []
+            for cell in row:
+                if cell == 'x' or cell == 'o':
+                    masked_row.append(cell)
+                else:
+                    masked_row.append('~')
+            masked.append(masked_row)
+        return masked

@@ -51,15 +51,12 @@ function Lobby() {
         const playerId = localStorage.getItem('playerId');
         if (!hostLobbyId || !playerId) return;
         if (pollingInterval.current) clearInterval(pollingInterval.current);
+        // Poll for game existence for the host
         pollingInterval.current = setInterval(async () => {
             try {
-                const res = await fetch(`/lobby/${hostLobbyId}/join`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ player_id: playerId })
-                });
-                const data = await res.json();
-                if (data.game_created) {
+                const res = await fetch(`/games/by-player/${playerId}`);
+                if (res.ok) {
+                    const data = await res.json();
                     setCurrentGame(data);
                     localStorage.setItem("gameId", data.game_id);
                     clearInterval(pollingInterval.current);

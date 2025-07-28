@@ -42,6 +42,7 @@ class Ship:
             ypos=data['ypos'],
             orientation=data['orientation']
         )
-        ship.coordinates = data.get('coordinates', [])
+        # Convert coordinates from list of lists to list of tuples
+        ship.coordinates = [tuple(coord) for coord in data.get('coordinates', [])]
         ship.hits = data.get('hits', 0)
         return ship

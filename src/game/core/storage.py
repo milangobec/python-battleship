@@ -85,8 +85,8 @@ class GameStorage:
             "game": game.to_dict(),
             "player1": player1.to_dict_profile(),
             "player2": player2.to_dict_profile(),
-            "board1": board1.to_dict(),
-            "board2": board2.to_dict()
+            "board1": board1.to_dict_save(),
+            "board2": board2.to_dict_save()
         }
         
         self.data[game_id] = game_data
@@ -94,6 +94,7 @@ class GameStorage:
         return game_id
     
     def load_game(self, game_id):
+        self.data = self.load_all_games()
         if game_id not in self.data:
             return None, None, None, None, None
         
@@ -104,8 +105,8 @@ class GameStorage:
         player2 = Player.from_dict_profile(game_data["player2"])
         
         # Reconstruct boards
-        board1 = Board.from_dict(game_data["board1"])
-        board2 = Board.from_dict(game_data["board2"])
+        board1 = Board.from_dict_save(game_data["board1"])
+        board2 = Board.from_dict_save(game_data["board2"])
         
         # Import Game here to avoid circular import
         from .game import Game

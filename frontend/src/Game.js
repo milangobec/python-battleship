@@ -1,18 +1,65 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './Game.css';
 
+// Utility to mask the enemy board (show only x/o, otherwise ~)
+function getMaskedBoard(board) {
+    // Only show hits ('x') and misses ('o'), everything else is water ('~')
+    return board.grid.map(row =>
+        row.map(cell => {
+            if (cell === 'x' || cell === 'o') return cell;
+            return '~';
+        })
+    );
+}
+
 function Game({ gameData, onGameEnd }) {
-    const [gameState, setGameState] = useState(gameData);
+    const [gameState, setGameState] = useState({ ...gameData, id: gameData.game_id });
     const [placementPhase, setPlacementPhase] = useState(true);
     const [selectedShip, setSelectedShip] = useState(null);
     const [shipPlacements, setShipPlacements] = useState({});
     const [dragOverCell, setDragOverCell] = useState(null);
     const [orientation, setOrientation] = useState('horizontal');
+    const [attackResult, setAttackResult] = useState(null); // <-- Add this line
+    const pollingRef = useRef(null);
     
     const playerId = localStorage.getItem('playerId');
-    const isPlayer1 = gameData.player1.id === playerId;
-    const myBoard = isPlayer1 ? gameData.boards.player1_board : gameData.boards.player2_board;
-    const enemyBoard = isPlayer1 ? gameData.boards.player2_board : gameData.boards.player1_board;
+
+    // Always call hooks at the top level
+    useEffect(() => {
+        if (!gameState.player1 || !gameState.player2 || !gameState.boards) return;
+        if (!placementPhase) {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            pollingRef.current = setInterval(async () => {
+                const updatedGameRes = await fetch(`/games/${gameState.id}`);
+                const updateGame = await updatedGameRes.json();
+                setGameState({ ...updateGame, id: updateGame.game_id });
+            }, 1000); 
+            return () => {
+                if (pollingRef.current) clearInterval(pollingRef.current);
+            };
+        } else {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+        }
+    }, [placementPhase, gameState.id, gameState.player1, gameState.player2, gameState.boards]);
+
+    useEffect(() => {
+        if (!gameState.player1 || !gameState.player2 || !gameState.boards) return;
+        const isPlayer1 = gameState.player1 && gameState.player1.id === playerId;
+        const myTurn = gameState.current_turn === playerId;
+        const myBoard = isPlayer1 ? gameState.boards.player1_board : gameState.boards.player2_board;
+        const enemyBoard = isPlayer1 ? gameState.boards.player2_board : gameState.boards.player1_board;
+        // Log turn info every time gameState changes
+        console.log('[TURN DEBUG] playerId:', playerId, 'current_turn:', gameState.current_turn, 'myTurn:', myTurn);
+    }, [gameState, playerId]);
+
+    // Defensive: wait for all required game state fields
+    if (!gameState.player1 || !gameState.player2 || !gameState.boards) {
+        return <div>Loading game...</div>;
+    }
+    const isPlayer1 = gameState.player1 && gameState.player1.id === playerId;
+    const myTurn = gameState.current_turn === playerId;
+    const myBoard = isPlayer1 ? gameState.boards.player1_board : gameState.boards.player2_board;
+    const enemyBoard = isPlayer1 ? gameState.boards.player2_board : gameState.boards.player1_board;
 
     const availableShips = [
         { name: 'carrier', size: 5, color: '#FF6B6B' },
@@ -91,7 +138,57 @@ function Game({ gameData, onGameEnd }) {
         setDragOverCell(null);
     };
 
+    // Helper to render your own board using shipPlacements (preserve color/ships)
+    const renderMyBoardCell = (x, y) => {
+        const key = `${x},${y}`;
+        const placement = shipPlacements[key];
+        let cellClass = 'cell';
+        let cellStyle = {};
+        if (placement) {
+            cellClass += ' ship';
+            cellStyle.backgroundColor = placement.color;
+        }
+        return (
+            <div
+                key={key}
+                className={cellClass}
+                style={cellStyle}
+            >
+                {placement ? placement.ship[0].toUpperCase() : '~'}
+            </div>
+        );
+    };
+
     const renderCell = (x, y, isEnemy = false) => {
+        if (!placementPhase) {
+            if (!isEnemy) {
+                // After placement, keep rendering your own board using shipPlacements
+                return renderMyBoardCell(x, y);
+            }
+            // Enemy board: use backend masked board
+            const maskedEnemyGrid = getMaskedBoard(enemyBoard);
+            if (x === 0 && y === 0) {
+                // Log the masked enemy board once per render
+                console.log('[RENDER] Masked enemy board:', maskedEnemyGrid);
+            }
+            const cellValue = maskedEnemyGrid[y][x];
+            // Log the cell being rendered
+            console.log(`[RENDER] Enemy cell (${x},${y}):`, cellValue);
+            let cellClass = 'cell';
+            if (cellValue === 'x') cellClass += ' hit';
+            if (cellValue === 'o') cellClass += ' miss';
+            const canAttack = isEnemy && myTurn && cellValue === '~';
+            return (
+                <div
+                    key={`${x},${y}`}
+                    className={cellClass}
+                    onClick={canAttack ? () => handleEnemyCellClick(x, y) : undefined}
+                    style={{ cursor: canAttack ? 'pointer' : 'default' }}
+                >
+                    {cellValue}
+                </div>
+            );
+        }
         const key = `${x},${y}`;
         const placement = shipPlacements[key];
         const isDragOver = dragOverCell && dragOverCell.x === x && dragOverCell.y === y;
@@ -106,15 +203,19 @@ function Game({ gameData, onGameEnd }) {
         }
         
         const handleCellClick = () => {
-            if (!placement || isEnemy || !placementPhase) return;
-            // Remove all cells for this ship
-            const newPlacements = { ...shipPlacements };
-            Object.keys(newPlacements).forEach(cellKey => {
-                if (newPlacements[cellKey].ship === placement.ship) {
-                    delete newPlacements[cellKey];
-                }
-            });
-            setShipPlacements(newPlacements);
+            if (placementPhase) {
+                if (!placement || isEnemy || !placementPhase) return;
+
+                const newPlacements = { ...shipPlacements };
+                Object.keys(newPlacements).forEach(cellKey => {
+                    if (newPlacements[cellKey].ship === placement.ship) {
+                        delete newPlacements[cellKey];
+                    }
+                });
+                setShipPlacements(newPlacements);
+            } else if (isEnemy && myTurn) {
+                handleEnemyCellClick(x, y);
+            }
         };
         return (
             <div
@@ -130,6 +231,38 @@ function Game({ gameData, onGameEnd }) {
                 {placement && !isEnemy ? placement.ship[0].toUpperCase() : '~'}
             </div>
         );
+    };
+
+    const handleEnemyCellClick = async (x,y) => {
+        if (!myTurn) return;
+
+        const response = await fetch(`/games/${gameState.id}/attack`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({x, y, player_id:playerId})
+        });
+
+        const result = await response.json();
+        if (result.error) {
+            alert(result.error)
+            return;
+        }
+        // Show immediate feedback
+        if (result.result === 'x') {
+            setAttackResult('Hit!');
+        } else if (result.result === 'o') {
+            setAttackResult('Miss!');
+        } else {
+            setAttackResult(null);
+        }
+        setTimeout(async () => {
+            const updatedGameRes = await fetch(`/games/${gameState.id}`);
+            const updateGame = await updatedGameRes.json();
+            console.log('[ATTACK] Updated game state:', updateGame);
+            setGameState({ ...updateGame, id: updateGame.game_id });
+            console.log('[TURN DEBUG] playerId:', playerId, 'current_turn:', updateGame.current_turn, 'myTurn:', updateGame.current_turn === playerId);
+            setAttackResult(null);
+        }, 800);
     };
 
     const renderBoard = (boardData, isEnemy = false) => {
@@ -179,7 +312,6 @@ function Game({ gameData, onGameEnd }) {
     };
 
     const submitShipPlacements = async () => {
-        // Group cells by ship name
         const shipsToPlace = {};
         for (const key in shipPlacements) {
             const { ship, orientation } = shipPlacements[key];
@@ -188,14 +320,11 @@ function Game({ gameData, onGameEnd }) {
         }
         for (const shipName in shipsToPlace) {
             const { cells, orientation } = shipsToPlace[shipName];
-            // Find origin: for horizontal, leftmost x; for vertical, topmost y
             const coords = cells.map(k => k.split(',').map(Number));
             let origin;
             if (orientation === 'horizontal') {
-                // Find cell with min x, then min y (should all have same y)
                 origin = coords.reduce((min, curr) => (curr[0] < min[0] ? curr : min), coords[0]);
             } else {
-                // Find cell with min y, then min x (should all have same x)
                 origin = coords.reduce((min, curr) => (curr[1] < min[1] ? curr : min), coords[0]);
             }
             const [x, y] = origin;
@@ -206,12 +335,11 @@ function Game({ gameData, onGameEnd }) {
                 y,
                 orientation
             };
-            const gameId = localStorage.getItem("gameId") || gameState.id || gameState.game_id;
-            if (!gameId) {
+            if (!gameState.id) {
                 alert("no game id found.")
                 return;
             }
-            const response = await fetch(`/games/${gameId}/place-ship`, {
+            const response = await fetch(`/games/${gameState.id}/place-ship`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -260,11 +388,30 @@ function Game({ gameData, onGameEnd }) {
         );
     }
 
+    if (gameState.game_over) {
+        const isWinner = gameState.winner_id === playerId;
+        return (
+            <div className="game-container">
+                <h2>Game Over</h2>
+                <div className="game-status" style={{ fontSize: 24, fontWeight: 'bold', margin: 24 }}>
+                    {isWinner ? "You win! 🎉" : "You lose! 😢"}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="game-container">
             <h2>Battleship Game</h2>
+            {/* Debug Info Start */}
+            {/* Debug Info End */}
             <div className="game-status">
                 <p>Current Turn: {gameState.current_turn === playerId ? 'Your Turn' : 'Opponent\'s Turn'}</p>
+                {attackResult && (
+                    <div className="attack-feedback" style={{ fontWeight: 'bold', color: attackResult === 'Hit!' ? 'red' : 'blue', marginTop: 8 }}>
+                        {attackResult}
+                    </div>
+                )}
             </div>
             <div className="boards-container">
                 <div className="board-section">

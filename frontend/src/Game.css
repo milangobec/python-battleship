@@ -17,19 +17,20 @@
 
 .board-grid {
     display: grid;
-    grid-template-columns: repeat(10, 48px);
-    grid-template-rows: repeat(10, 48px);
+    grid-template-columns: repeat(10, 44px);
+    grid-template-rows: repeat(10, 44px);
     gap: 0;
     background-color: #f0f0f0;
     border-radius: 5px;
     border: none;
     margin: 0 auto;
-    box-sizing: content-box;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .cell {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     background-color: #87CEEB;
     border: 1px solid #333;
     display: flex;
@@ -149,4 +150,5 @@
     background: #e0e0e0;
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     margin: 0 auto;
+    overflow: hidden;
 }

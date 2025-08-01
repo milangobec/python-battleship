@@ -37,6 +37,7 @@ class PlayerResponse(BaseModel):
     accuracy: float
     wins: int
     losses: int
+    ships_sunk: int
 
 class BoardResponse(BaseModel):
     width: int
@@ -51,7 +52,7 @@ class GameResponse(BaseModel):
     game_id: str
     player1: PlayerResponse
     player2: PlayerResponse
-    current_turn: str
+    current_turn: Optional[str] = None
     game_over: bool
     turn_count: int
     boards: GameBoardsResponse
@@ -86,3 +87,4 @@ class AttackResponse(BaseModel):
     current_turn: str
     winner: Optional[str] = None
     winner_id: Optional[str] = None
+    ship_sunk: Optional[str] = None

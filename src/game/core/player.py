@@ -17,6 +17,7 @@ class Player:
         self.accuracy = 0.0
         self.wins = 0
         self.losses = 0
+        self.ships_sunk = 0
     
     def place_ship(self, ship, xpos, ypos, orientation):
         try:
@@ -43,6 +44,9 @@ class Player:
     
     def record_loss(self):
         self.losses += 1
+
+    def record_ship_sunk(self):
+        self.ships_sunk += 1
     
     def get_player_info(self):
         return {
@@ -63,7 +67,8 @@ class Player:
             "misses": self.misses,
             "accuracy": self.calculate_accuracy(),
             "wins": self.wins,
-            "losses": self.losses
+            "losses": self.losses,
+            "ships_sunk": self.ships_sunk
         }
     
     @classmethod
@@ -80,6 +85,7 @@ class Player:
         player.accuracy = data['accuracy']
         player.wins = data['wins']
         player.losses = data['losses']
+        player.ships_sunk = data.get('ships_sunk', 0)
         return player
 
     def has_lost(self):

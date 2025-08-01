@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Game from './Game'
 
-function Lobby() {
+function Lobby({ onGameStateChange }) {
     const [lobbyName, setLobbyName] = useState('');
     const [showLobbyInput, setShowLobbyInput] = useState(false);
     const [lobbies, setLobbies] = useState([]);
@@ -13,6 +13,8 @@ function Lobby() {
     const [currentGame, setCurrentGame] = useState(null);
     const pollingInterval = useRef(null);
     const [hostLobbyId, setHostLobbyId] = useState(null);
+    
+    console.log('Lobby: Component re-rendering, currentGame:', currentGame);
 
     const createLobby = async () => {
         localStorage.removeItem("gameId"); // Clear old gameId before creating a new lobby
@@ -27,7 +29,7 @@ function Lobby() {
             return;
         }
 
-        const res = await fetch('lobby/create',{
+        const res = await fetch('/lobby/create',{
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -49,7 +51,7 @@ function Lobby() {
 
     useEffect(() => {
         const playerId = localStorage.getItem('playerId');
-        if (!hostLobbyId || !playerId) return;
+        if (!hostLobbyId || !playerId || currentGame) return; // Stop polling if game already exists
         if (pollingInterval.current) clearInterval(pollingInterval.current);
 <<<<<<< HEAD
         // Poll for game existence for the host
@@ -58,6 +60,7 @@ function Lobby() {
                 const res = await fetch(`/games/by-player/${playerId}`);
                 if (res.ok) {
                     const data = await res.json();
+<<<<<<< HEAD
 =======
         pollingInterval.current = setInterval(async () => {
             try {
@@ -69,19 +72,22 @@ function Lobby() {
                 const data = await res.json();
                 if (data.game_created) {
 >>>>>>> 062d92a (Expand game frontend and update backend structure, setup, and docs.)
+=======
+                    console.log('Lobby: Host polling found game:', data);
+>>>>>>> b07dc79 (Implement tailwindcss into ui, improve game sate, track sinking a whole ship)
                     setCurrentGame(data);
                     localStorage.setItem("gameId", data.game_id);
                     clearInterval(pollingInterval.current);
                     setHostLobbyId(null);
                 }
             } catch (err) {
-                // ignore errors during polling
+                console.error('Lobby: Host polling error:', err);
             }
         }, 2000);
         return () => {
             if (pollingInterval.current) clearInterval(pollingInterval.current);
         };
-    }, [hostLobbyId]);
+    }, [hostLobbyId, currentGame]);
 
     useEffect(() => {
         return () => {
@@ -95,7 +101,7 @@ function Lobby() {
         setShowLobbyList(true);
 
         try {
-            const res = await fetch('lobby/list', {
+            const res = await fetch('/lobby/list', {
                 method: 'GET',
                 headers: { 'Content-Type': 'application/json' },
             });
@@ -149,10 +155,8 @@ function Lobby() {
                 setCurrentGame(data);
                 localStorage.setItem("gameId", data.game_id);
                 setJoiningLobby(null);
-                setTimeout(() => {
-                    listLobbies();
-                    setJoinStatus(null);
-                }, 2000);
+                // Remove the setTimeout that was interfering with game state
+                setJoinStatus(null);
             }
         }catch (err) {
             setError(err.message)
@@ -167,77 +171,122 @@ function Lobby() {
         setShowLobbyList(false);
     };
 
-    if (currentGame) {
-        return <Game gameData={currentGame} onGameEnd={handleGameEnd} />;
-    }
+    // Notify parent component about game state changes
+    useEffect(() => {
+        console.log('Lobby: currentGame changed to:', currentGame);
+        if (onGameStateChange) {
+            onGameStateChange(!!currentGame, currentGame);
+        }
+    }, [currentGame, onGameStateChange]);
 
     return (
-        <div>
-            {!showLobbyInput && (
-                <button onClick={() => setShowLobbyInput(true)}>Create Lobby</button>
-            )}
-
-            {showLobbyInput && (
-                <>
-                    <input
-                        value={lobbyName}
-                        onChange={(e) => setLobbyName(e.target.value)}
-                        placeholder='Enter lobby name'
-                    />
-                    <button onClick={createLobby}>Submit Lobby</button>
-                    <button onClick={() => setShowLobbyInput(false)}>Cancel</button>
-                </>
+        <div class="space-y-6">
+            <div class="space-y-4">
+                {!showLobbyInput && (
+                    <button
+                        onClick={() => setShowLobbyInput(true)}
+                        class="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white px-4 py-2 rounded-md transition">
+                        Create Lobby
+                    </button>
                 )}
 
-                <hr/>
+                {showLobbyInput && (
+                    <div class="space-y-3 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <input
+                            value={lobbyName}
+                            onChange={(e) => setLobbyName(e.target.value)}
+                            placeholder='Enter lobby name'
+                            class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
+                        />
+                        <div class="flex space-x-2">
+                            <button
+                                onClick={createLobby}
+                                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition">
+                                Create Lobby
+                            </button>
+                            <button
+                                onClick={() => setShowLobbyInput(false)}
+                                class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md transition">
+                                Cancel
+                            </button>
+                        </div>    
+                    </div>
+                )}
+            </div>
 
-                <button onClick={listLobbies}>Show All Lobbies</button>
+            <div class="border-t border-gray-200 dark:border-gray-700"></div>
 
-                {loadingLobbies && <p>Loading lobbies...</p>}
-                {error && <p style={{ color: 'red' }}>Error: {error}</p>}
-                {joinStatus && <p style={{ color: 'blue'}}>{joinStatus}</p>}
+            <div class="space-y-4">
+                <button 
+                    onClick={() => {
+                        if (showLobbyList) {
+                            setShowLobbyList(false);
+                        } else {
+                            listLobbies();
+                        }
+                    }}
+                    class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md transition">
+                    {showLobbyList ? 'Hide Lobbies' : 'Show Lobbies'}
+                </button>
+                    
 
-                {showLobbyList && !loadingLobbies &&(
-                    <ul>
+                {loadingLobbies && (
+                    <div class="text-center py-4">
+                        <p class="text-gray-600 dark:text-gray-300">Loading lobbies...</p>
+                    </div>
+                )}
+                
+                {error && (
+                    <div class="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded">
+                        Error: {error}
+                    </div>
+                )}
+                
+                {joinStatus && (
+                    <div class="bg-blue-100 dark:bg-blue-900 border border-blue-400 dark:border-blue-700 text-blue-700 dark:text-blue-300 px-4 py-3 rounded">
+                        {joinStatus}
+                    </div>
+                )}
+
+                {showLobbyList && !loadingLobbies && (
+                    <div class="space-y-3">
                         {lobbies.length === 0 ? (
-                            <li>No lobbies available.</li>
+                            <div class="text-center py-4 text-gray-500 dark:text-gray-400">
+                                No lobbies available.
+                            </div>
                         ) : (
                             lobbies.map((lobby) => (
-                                <li key={lobby.id} style={{
-                                    border: '1px solid #ccc',
-                                    padding: '10px',
-                                    margin: '10px 0',
-                                    borderRadius: '5px',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    maxWidth: '500px',
-                                    width: '100%'
-                                }}>
-                                    <div>
-                                        <strong>{lobby.name || "Unnamed Lobby"}</strong> - Host: {lobby.host_name}, Players: {lobby.player_count ?? "N/A"}/2
+                                <div key={lobby.id} class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-700">
+                                    <div class="flex justify-between items-center">
+                                        <div class="flex-1">
+                                            <h3 class="font-semibold text-gray-900 dark:text-white">
+                                                {lobby.name || "Unnamed Lobby"}
+                                            </h3>
+                                            <p class="text-sm text-gray-600 dark:text-gray-300">
+                                                Host: {lobby.host_name} • Players: {lobby.player_count ?? "N/A"}/2
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => joinLobby(lobby.id)}
+                                            disabled={joiningLobby === lobby.id || lobby.player_count >= 2}
+                                            class={`px-4 py-2 rounded-md transition ${
+                                                lobby.player_count >= 2 
+                                                    ? 'bg-gray-400 dark:bg-gray-600 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
+                                                    : joiningLobby === lobby.id
+                                                    ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                                    : 'bg-green-600 hover:bg-green-700 text-white'
+                                            }`}
+                                        >
+                                            {joiningLobby === lobby.id ? 'Joining...' :
+                                                lobby.player_count >= 2 ? 'Full' : 'Join Lobby'}
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={() => joinLobby(lobby.id)}
-                                        disabled={joiningLobby === lobby.id || lobby.player_count >= 2}
-                                        style={{
-                                            background: lobby.player_count >= 2 ? '#ccc' : '#4CAF50',
-                                            color: 'white',
-                                            border: 'none',
-                                            padding: '5px 10px',
-                                            borderRadius: '3px',
-                                            cursor: lobby.player_count >= 2 ? 'not-allowed' : 'pointer'
-                                        }}
-                                    >
-                                        {joiningLobby === lobby.id ? 'Joining...' :
-                                            lobby.player_count >= 2 ? 'Full' : 'Join Lobby'}
-                                    </button>
-                                        
-                                </li>
+                                </div>
                             ))
                         )}
-                    </ul>
+                    </div>
                 )}
+            </div>
         </div>
     );
 

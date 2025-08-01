@@ -89,6 +89,9 @@ class GameStorage:
             "board2": board2.to_dict_save()
         }
         
+        print(f"[DEBUG] GameStorage.save_game - game.to_dict(): {game.to_dict()}")
+        print(f"[DEBUG] GameStorage.save_game - current_turn in game_data: {game_data['game']['current_turn']}")
+        
         self.data[game_id] = game_data
         self.save_all_games()
         return game_id
@@ -107,6 +110,10 @@ class GameStorage:
         # Reconstruct boards
         board1 = Board.from_dict_save(game_data["board1"])
         board2 = Board.from_dict_save(game_data["board2"])
+        
+        # Sync players' ships lists with the ships on their boards
+        player1.ships = board1.ships.copy()
+        player2.ships = board2.ships.copy()
         
         # Import Game here to avoid circular import
         from .game import Game

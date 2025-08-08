@@ -6,7 +6,7 @@ router = APIRouter()
 
 @router.get("/{player_id}", response_model=PlayerResponse)
 def get_player(player_id: str):
-    """Get a player by ID"""
+    #Get a player by ID
     try:
         player = PlayerService.load_player(player_id)
         if not player:
@@ -17,7 +17,7 @@ def get_player(player_id: str):
 
 @router.post("/create")
 def create_player(player_data: PlayerCreate):
-    """Create a new player"""
+    #Create a new player
     try:
         player = PlayerService.create_player(player_data.name)
         return {

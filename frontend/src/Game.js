@@ -13,26 +13,62 @@ function getMaskedBoard(board) {
 }
 
 function Game({ gameData, onGameEnd }) {
+    console.log('Game: Initial gameData', gameData);
     const [gameState, setGameState] = useState({ ...gameData, id: gameData.game_id });
-    const [placementPhase, setPlacementPhase] = useState(true);
+    const [placementPhase, setPlacementPhase] = useState(false);
     const [selectedShip, setSelectedShip] = useState(null);
     const [shipPlacements, setShipPlacements] = useState({});
     const [dragOverCell, setDragOverCell] = useState(null);
     const [orientation, setOrientation] = useState('horizontal');
-    const [attackResult, setAttackResult] = useState(null); // <-- Add this line
+    const [attackResult, setAttackResult] = useState(null);
+    const [shipSunkMessage, setShipSunkMessage] = useState(null);
     const pollingRef = useRef(null);
     
     const playerId = localStorage.getItem('playerId');
 
     // Always call hooks at the top level
+    // Separate useEffect to handle placement phase
     useEffect(() => {
-        if (!gameState.player1 || !gameState.player2 || !gameState.boards) return;
-        if (!placementPhase) {
+        if (gameState.player1 && gameState.player2 && gameState.boards) {
+            if (gameState.current_turn) {
+                setPlacementPhase(false);
+            }else {
+                setPlacementPhase(true);
+            }
+        } else {
+            setPlacementPhase(false);
+        }
+    }, [gameState.player1, gameState.player2, gameState.boards, gameState.current_turn]);
+
+    useEffect(() => {
+        console.log('Game: Polling useEffect triggered', {
+            player1: !!gameState.player1,
+            player2: !!gameState.player2,
+            boards: !!gameState.boards,
+            placementPhase,
+            gameId: gameState.id
+        });
+        
+        if (!gameState.player1 || !gameState.boards) return;
+        
+        // Poll during placement phase when both players are present, or when game has started
+        if ((placementPhase && gameState.player2) || gameState.current_turn) {
             if (pollingRef.current) clearInterval(pollingRef.current);
             pollingRef.current = setInterval(async () => {
-                const updatedGameRes = await fetch(`/games/${gameState.id}`);
-                const updateGame = await updatedGameRes.json();
-                setGameState({ ...updateGame, id: updateGame.game_id });
+                try {
+                    const updatedGameRes = await fetch(`/games/${gameState.id}`);
+                    const updateGame = await updatedGameRes.json();
+                    console.log('Game: Polling update', updateGame);
+                    
+                    // Only update if we have valid game data
+                    if (updateGame && updateGame.game_id) {
+                        setGameState({ ...updateGame, id: updateGame.game_id });
+                    } else {
+                        console.log('Game: Polling received invalid game data:', updateGame);
+                    }
+                } catch (error) {
+                    console.error('Game: Polling error', error);
+                }
             }, 1000); 
             return () => {
                 if (pollingRef.current) clearInterval(pollingRef.current);
@@ -40,7 +76,7 @@ function Game({ gameData, onGameEnd }) {
         } else {
             if (pollingRef.current) clearInterval(pollingRef.current);
         }
-    }, [placementPhase, gameState.id, gameState.player1, gameState.player2, gameState.boards]);
+    }, [gameState.id, gameState.player1, gameState.player2, gameState.boards, gameState.current_turn, placementPhase]);
 
     useEffect(() => {
         if (!gameState.player1 || !gameState.player2 || !gameState.boards) return;
@@ -48,14 +84,28 @@ function Game({ gameData, onGameEnd }) {
         const myTurn = gameState.current_turn === playerId;
         const myBoard = isPlayer1 ? gameState.boards.player1_board : gameState.boards.player2_board;
         const enemyBoard = isPlayer1 ? gameState.boards.player2_board : gameState.boards.player1_board;
-        // Log turn info every time gameState changes
-        console.log('[TURN DEBUG] playerId:', playerId, 'current_turn:', gameState.current_turn, 'myTurn:', myTurn);
     }, [gameState, playerId]);
 
     // Defensive: wait for all required game state fields
-    if (!gameState.player1 || !gameState.player2 || !gameState.boards) {
+    if (!gameState.player1 || !gameState.boards) {
         return <div>Loading game...</div>;
     }
+
+    // Show waiting screen if only one player is present
+    if (!gameState.player2) {
+        return (
+            <div class="min-h-screen bg-gray-100 dark:bg-gray-900 flex flex-col items-center justify-center py-8">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 w-full max-w-md text-center">
+                    <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">Waiting for opponent to join...</h2>
+                    <div class="text-gray-600 dark:text-gray-300">
+                        <p>Game created! Share the lobby with another player to start.</p>
+                        <p class="mt-2">Player1: <span class="font-semibold">{gameState.player1.name}</span></p>  
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     const isPlayer1 = gameState.player1 && gameState.player1.id === playerId;
     const myTurn = gameState.current_turn === playerId;
     const myBoard = isPlayer1 ? gameState.boards.player1_board : gameState.boards.player2_board;
@@ -250,6 +300,11 @@ function Game({ gameData, onGameEnd }) {
         // Show immediate feedback
         if (result.result === 'x') {
             setAttackResult('Hit!');
+
+            if (result.ship_sunk) {
+                setShipSunkMessage(`You sunk their ${result.ship_sunk}!`)
+                setTimeout(() => setShipSunkMessage(null), 1500);
+            }
         } else if (result.result === 'o') {
             setAttackResult('Miss!');
         } else {
@@ -273,8 +328,10 @@ function Game({ gameData, onGameEnd }) {
             }
         }
         return (
-            <div className="board-grid">
-                {cells}
+            <div style={{ overflow: 'hidden', width: 'fit-content', margin: '0 auto' }}>
+                <div className="board-grid">
+                    {cells}
+                </div>
             </div>
         );
     };
@@ -356,8 +413,18 @@ function Game({ gameData, onGameEnd }) {
     };
 
     const startGame = async () => {
-        submitShipPlacements();
-        setPlacementPhase(false);
+        try{
+            await submitShipPlacements();
+
+            const response = await fetch(`/games/${gameState.id}`);
+            const updatedGame = await response.json();
+
+            setGameState({ ...updatedGame, id: updatedGame.game_id});
+
+            setPlacementPhase(false);
+        } catch (error) {
+            console.error("failed to start game:", error)
+        }
     };
 
     const allShipsPlaced = () => {
@@ -365,70 +432,139 @@ function Game({ gameData, onGameEnd }) {
     };
 
     if (placementPhase) {
-        return (
-            <div className="game-container" style={{display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: 48, minHeight: 400}}>
-                <div style={{flex: '0 0 260px'}}>
-                    {renderShipSelector()}
-                </div>
-                <div style={{flex: 0, marginLeft: 32}}>
-                    <h2 style={{ textAlign: 'center' }}>Your Board</h2>
-                    <div className="board-outer">
-                        {renderBoard(myBoard, false)}
+    return (
+        <div class="min-h-screen bg-gray-100 dark:bg-gray-900 flex flex-col items-center justify-center py-8">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 w-full max-w-6xl">
+                <div class="flex flex-row items-start justify-center gap-8">
+                    {/* Ship Selector */}
+                    <div class="w-64 flex-shrink-0">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Place Your Ships</h3>
+                        <div class="space-y-4">
+                            {availableShips.map((ship) => {
+                                const placed = placedShips.has(ship.name);
+                                return (
+                                    <div
+                                        key={ship.name}
+                                        class={`cursor-pointer transition block ${
+                                            placed 
+                                                ? 'opacity-40 cursor-not-allowed' 
+                                                : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                                        }`}
+                                        style={{ 
+                                            opacity: placed ? 0.4 : 1,
+                                            width: `${ship.size * 48}px`,
+                                            height: '48px',
+                                            overflow: 'hidden'
+                                        }}
+                                        onClick={() => handleShipSelect(ship)}
+                                        draggable={!placed}
+                                        onDragStart={placed ? undefined : (e) => {
+                                            e.dataTransfer.setData('text/plain', ship.name);
+                                            setSelectedShip(ship);
+                                        }}
+                                    >
+                                        {/* Ship visual representation */}
+                                        <div class="whitespace-nowrap" style={{ fontSize: 0 }}>
+                                            {Array.from({ length: ship.size }, (_, i) => (
+                                                <div 
+                                                    key={i}
+                                                    class="w-12 h-12 border border-black inline-block"
+                                                    style={{ backgroundColor: ship.color }}
+                                                ></div>
+                                            ))}
+                                        </div>
+                                        {placed && <div class="text-gray-600 dark:text-gray-400 text-sm mt-1">(Placed)</div>}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <button 
+                            onClick={handleOrientationChange}
+                            class="mt-4 w-full bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md transition"
+                        >
+                            Orientation: {orientation}
+                        </button>
+                        
+                        {allShipsPlaced() && (
+                            <button 
+                                onClick={startGame}
+                                class="mt-4 w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-md shadow transition font-semibold"
+                            >
+                                Start Game
+                            </button>
+                        )}
                     </div>
-                    <div style={{ textAlign: 'center', marginTop: 8, color: '#555', fontSize: 14 }}>
-                        Tip: Click ships on your board to remove them.
+                    
+                    {/* Board */}
+                    <div class="flex-1">
+                        <h2 class="text-xl font-semibold text-center text-gray-900 dark:text-white mb-4">Your Board</h2>
+                        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 shadow flex justify-center max-w-[480px] mx-auto">
+                            {renderBoard(myBoard, false)}
+                        </div>
+                        <div class="text-center text-gray-500 dark:text-gray-400 mt-2 text-sm">
+                            Tip: Click ships on your board to remove them.
+                        </div>
                     </div>
                 </div>
-                {allShipsPlaced() && (
-                    <button onClick={startGame} className="start-game-btn" style={{position: 'absolute', left: 60, bottom: 60}}>
-                        Start Game
-                    </button>
-                )}
             </div>
-        );
-    }
+        </div>
+    );
+}
 
     if (gameState.game_over) {
         const isWinner = gameState.winner_id === playerId;
         return (
-            <div className="game-container">
-                <h2>Game Over</h2>
-                <div className="game-status" style={{ fontSize: 24, fontWeight: 'bold', margin: 24 }}>
-                    {isWinner ? "You win! 🎉" : "You lose! 😢"}
+            <div class="min-h-screen bg-gray-100 dark:bg-gray-900 flex flex-col items-center justify-center py-8">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 w-full max-w-md text-center">
+                    <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">Game Over</h2>
+                    <div class="text-2xl font-bold my-6">
+                        {isWinner ? (
+                            <span class="text-green-600 dark:text-green-400">You win!</span>
+                        ) : (
+                            <span class="text-red-600 dark:text-red-400">You lose...</span>
+                        )}
+                    </div>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="game-container">
-            <h2>Battleship Game</h2>
-            {/* Debug Info Start */}
-            {/* Debug Info End */}
-            <div className="game-status">
-                <p>Current Turn: {gameState.current_turn === playerId ? 'Your Turn' : 'Opponent\'s Turn'}</p>
-                {attackResult && (
-                    <div className="attack-feedback" style={{ fontWeight: 'bold', color: attackResult === 'Hit!' ? 'red' : 'blue', marginTop: 8 }}>
-                        {attackResult}
+    <div class="min-h-screen bg-gray-100 dark:bg-gray-900 flex flex-col items-center justify-center py-8">
+        {shipSunkMessage && (
+                    <div class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
+                        {shipSunkMessage}
                     </div>
                 )}
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 w-full max-w-7xl">
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6 text-center">Battleship Game</h2>
+            <div class="mb-6 text-center">
+                <p class="text-lg font-medium text-gray-800 dark:text-gray-200">
+                    Current Turn: {gameState.current_turn === playerId ? 'Your Turn' : "Opponent's Turn"}
+                </p>
+                {attackResult && (
+                    <div class={`font-bold mt-2 ${attackResult === 'Hit!' ? 'text-red-600' : 'text-blue-600'}`}>
+                        {attackResult}
+                    </div>   
+                )}
             </div>
-            <div className="boards-container">
-                <div className="board-section">
-                    <h3>Your Board</h3>
-                    <div className="board-outer">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Your Board</h3>
+                    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 shadow max-w-[480px] mx-auto">
                         {renderBoard(myBoard, false)}
                     </div>
                 </div>
-                <div className="board-section">
-                    <h3>Enemy Board</h3>
-                    <div className="board-outer">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Enemy Board</h3>
+                    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 shadow max-w-[480px] mx-auto">
                         {renderBoard(enemyBoard, true)}
                     </div>
                 </div>
             </div>
         </div>
-    );
+    </div>
+);
 }
 
 export default Game;

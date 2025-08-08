@@ -12,7 +12,7 @@ class LobbyService:
         self.game_service = GameService()
 
     def create_lobby(self, player_id: str, lobby_name: str = None):
-        """Create a new lobby"""
+        #Create a new lobby
         player = PlayerService.load_player(player_id)
         if not player:
             raise ValueError("Player not found")
@@ -30,11 +30,11 @@ class LobbyService:
         }
 
     def get_available_lobbies(self):
-        """Get list of available lobbies"""
+        #Get list of available lobbies
         return self.lobby_storage.get_available_lobbies()
 
     def join_lobby(self, lobby_id: str, player_id: str) -> LobbyJoinResponse:
-        """Join a lobby and potentially create a game"""
+        #Join a lobby and potentially create a game
         lobby = self.lobby_storage.get_lobby(lobby_id)
         
         # Check if player is already in an active game
@@ -52,7 +52,7 @@ class LobbyService:
                         game_id=game_id,
                         player1=game_data["player1"],
                         player2=game_data["player2"],
-                        current_turn=game_data['game'].get('current_turn'),
+                        current_turn=game_data['game'].get('current_turn') if game_data['game'].get('current_turn') else None,
                         boards=boards
                     )
             raise ValueError("Lobby not found")
@@ -96,7 +96,7 @@ class LobbyService:
                 game_id=game_id,
                 player1=player1.to_dict_profile(),
                 player2=player2.to_dict_profile(),
-                current_turn=game.current_turn.id,
+                current_turn=game.current_turn.id if game.current_turn else None,
                 boards=boards
             )
         

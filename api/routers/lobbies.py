@@ -7,7 +7,7 @@ lobby_service = LobbyService()
 
 @router.post("/create")
 def create_lobby(lobby_data: LobbyCreate):
-    """Create a new lobby"""
+    #Create a new lobby
     try:
         return lobby_service.create_lobby(lobby_data.player_id, lobby_data.lobby_name)
     except ValueError as e:
@@ -17,7 +17,7 @@ def create_lobby(lobby_data: LobbyCreate):
 
 @router.get("/list", response_model=LobbyListResponse)
 def list_lobbies():
-    """Get list of available lobbies"""
+    #Get list of available lobbies
     try:
         lobbies = lobby_service.get_available_lobbies()
         return LobbyListResponse(lobbies=lobbies)
@@ -26,7 +26,7 @@ def list_lobbies():
 
 @router.post("/{lobby_id}/join", response_model=LobbyJoinResponse)
 def join_lobby(lobby_id: str, join_data: LobbyJoin):
-    """Join a lobby"""
+    #Join a lobby
     try:
         return lobby_service.join_lobby(lobby_id, join_data.player_id)
     except ValueError as e:

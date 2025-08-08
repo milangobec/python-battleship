@@ -22,7 +22,7 @@ def get_game(game_id: str):
         game_id=game_id,
         player1=player1.to_dict_profile(),
         player2=player2.to_dict_profile(),
-        current_turn=game.current_turn.id,
+        current_turn=game.current_turn.id if game.current_turn else None,
         game_over=game.game_over,
         turn_count=game.turn_count,
         boards=GameBoardsResponse(
@@ -42,7 +42,7 @@ def get_game_by_player(player_id: str):
         game_id=game.game_id,
         player1=player1.to_dict_profile(),
         player2=player2.to_dict_profile(),
-        current_turn=game.current_turn.id,
+        current_turn=game.current_turn.id if game.current_turn else None,
         game_over=game.game_over,
         turn_count=game.turn_count,
         boards=GameBoardsResponse(
@@ -54,7 +54,7 @@ def get_game_by_player(player_id: str):
 
 @router.post("/{game_id}/attack", response_model=AttackResponse)
 def make_attack(game_id: str, attack_data: AttackRequest):
-    """Make an attack in a game"""
+    #Make an attack in a game
     try:
         return game_service.make_attack(
             game_id, 
@@ -69,7 +69,7 @@ def make_attack(game_id: str, attack_data: AttackRequest):
 
 @router.post("/{game_id}/place-ship", response_model=ShipPlacementResponse)
 def place_ship(game_id: str, placement_data: ShipPlacement):
-    """Place a ship on a player's board"""
+    #Place a ship on a player's board
     try:
         return game_service.place_ship(
             game_id,

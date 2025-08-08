@@ -9,7 +9,7 @@ class GameService:
         self.player_manager = PlayerDataManager()
 
     def get_game(self, game_id: str):
-        """Get a game by ID"""
+        #Get a game by ID
         result = self.game_storage.load_game(game_id)
         if result[0] is None:
             return None
@@ -24,8 +24,7 @@ class GameService:
         return game, player1, player2, board1, board2, winner_id
 
     def get_game_by_player(self, player_id: str):
-        """Get a game by player ID (player1 or player2)"""
-        # Ensure data is up to date
+        #Get a game by player ID (player1 or player2
         self.game_storage.data = self.game_storage.load_all_games()
         for game_id, game_data in self.game_storage.data.items():
             p1 = game_data.get('player1', {}).get('id')
@@ -35,7 +34,7 @@ class GameService:
         return None
 
     def create_game(self, player1_id: str, player2_id: str) -> str:
-        """Create a new game between two players"""
+        #Create a new game between two players
         player1 = PlayerService.load_player(player1_id)
         player2 = PlayerService.load_player(player2_id)
         
@@ -57,7 +56,7 @@ class GameService:
         return game_id
 
     def make_attack(self, game_id: str, player_id: str, x: int, y: int) -> AttackResponse:
-        """Process an attack in a game"""
+        #Process an attack in a game
         result = self.game_storage.load_game(game_id)
         if result[0] is None:
             raise ValueError("Game not found")
@@ -65,6 +64,8 @@ class GameService:
         game, player1, player2, board1, board2 = result
         
         # Verify it's the player's turn
+        if game.current_turn is None:
+            raise ValueError("Game not started yet")
         if game.current_turn.id != player_id:
             raise ValueError("Not your turn")
         
@@ -78,8 +79,14 @@ class GameService:
         
         # Update game state
         winner_id = None
+        ship_sunk = None
+
         if attack_result == 'x':
             game.current_turn.record_hit()
+
+            ship_sunk = self.check_if_ship_sunk(target_board, x, y)
+            if ship_sunk:
+                game.current_turn.record_ship_sunk()
             if target_board.all_ships_sunk():
                 game.game_over = True
                 game.current_turn.record_win()
@@ -102,13 +109,22 @@ class GameService:
         return AttackResponse(
             result=attack_result,
             game_over=game.game_over,
-            current_turn=game.current_turn.id,
+            current_turn=game.current_turn.id if game.current_turn else None,
             winner=game.current_turn.name if game.game_over else None,
-            winner_id=winner_id
+            winner_id=winner_id,
+            ship_sunk=ship_sunk
         )
+    def check_if_ship_sunk(self, board, x, y):
+        #logic to check if a ship has been sunk, 
+        #return the ship name if sunk, None otherwise
+        for ship in board.ships: 
+            if (x,y) in ship.coordinates:
+                if ship.is_sunk():
+                    return ship.name
+        return None
 
     def place_ship(self, game_id: str, player_id: str, ship_name: str, x: int, y: int, orientation: str) -> ShipPlacementResponse:
-        """Place a ship on a player's board"""
+        #Place a ship on a player's board
         result = self.game_storage.load_game(game_id)
         if result[0] is None:
             raise ValueError("Game not found")
@@ -153,27 +169,24 @@ class GameService:
         board.place_ship(ship, x, y, orientation)
         player.ships.append(ship)
 
-        # Check if all ships are placed for this player
-        if len(player.ships) == len(available_ships):
-            if player_id == player1.id:
-                game.player1_ready = True
-            else:
-                game.player2_ready = True
+        print(f"[DEBUG] After placing {ship_name}: player1 ships: {len(player1.ships)}, player2 ships: {len(player2.ships)}")
+        print(f"[DEBUG] player1.ships: {[s.name for s in player1.ships]}")
+        print(f"[DEBUG] player2.ships: {[s.name for s in player2.ships]}")
 
-        # If both players are ready, randomly set current_turn (if not already set)
-        if game.all_ships_placed():
-            # Only randomize current_turn once, when both are ready
+        if len(player1.ships) == 5 and len(player2.ships) == 5:
             import random
-            if not hasattr(game, '_turn_randomized') or not getattr(game, '_turn_randomized'):
-                if random.randint(0, 1) == 0:
-                    game.current_turn = player1
-                    game.opponent = player2
-                else:
-                    game.current_turn = player2
-                    game.opponent = player1
-                game._turn_randomized = True
+            print(f"[DEBUG] Both players have placed all ships! Setting current_turn...")
+            if random.randint(0,1) == 0:
+                game.current_turn = player1
+                game.opponent = player2
+                print(f"[DEBUG] Set current_turn to player1: {player1.name} ({player1.id})")
+            else:
+                game.current_turn = player2
+                game.opponent = player1
+                print(f"[DEBUG] Set current_turn to player2: {player2.name} ({player2.id})")
         
         # Save the updated game state
+        print(f"[DEBUG] Saving game with current_turn: {game.current_turn.id if game.current_turn else None}")
         self.game_storage.save_game(game, player1, player2, board1, board2, game_id)
 
         return ShipPlacementResponse(

@@ -16,7 +16,8 @@ function App() {
     });
     const data = await res.json();
     localStorage.setItem('playerId', data.player_id);
-    setMessage(`Created player: ${data.name} with ID: ${data.player_id}. Remeber this id for future games`);
+    localStorage.removeItem('gameId'); // Clear any old gameId on new registration
+    setMessage(`Created player: ${data.name} with ID: ${data.player_id}. Remember this id for future games.\nIf you want to play as a different player, register a new one here first!`);
     setLoginPlayerId(data.player_id);
     setNewPlayerName('');
   };

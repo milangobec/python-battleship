@@ -15,6 +15,9 @@ class Game:
         self.board2 = player2.board
         self.storage = storage
 
+        self.player1_ready = False
+        self.player2_ready = False
+
         random_turn = random.randint(0, 1)
         if random_turn == 0:
             self.current_turn = player1
@@ -25,9 +28,10 @@ class Game:
 
         self.game_over = False
         self.turn_count = 0
+        self.game_id = None  # Ensure game_id is always present
 
     def switch_turn(self):
-        if self.current_turn == self.player1:
+        if self.current_turn.id == self.player1.id:
             self.current_turn = self.player2
             self.opponent = self.player1
         else:
@@ -140,13 +144,18 @@ class Game:
             "turn_count": self.turn_count
         }
         
+    def all_ships_placed(self):
+        return self.player1_ready and self.player2_ready
+
     def to_dict(self):
         return {
             "current_turn": self.current_turn.id,
             "game_over": self.game_over,
             "turn_count": self.turn_count,
             "winner_name" : getattr(self, "winner_name", None),
-            "game_id": getattr(self, "game_id", None)
+            "game_id": self.game_id,  # Always include game_id
+            "player1_ready": self.player1_ready,
+            "player2_ready": self.player2_ready
         }
         
     @classmethod
@@ -157,7 +166,8 @@ class Game:
         game.game_over = data['game_over']
         game.turn_count = data['turn_count']
         game.winner_name = data.get('winner_name', None)
-        game.game_id = data.get('game_id')
+        game.game_id = data.get('game_id')  # Restore game_id if present
+        game.player1_ready = data.get('player1_ready', False)
+        game.player2_ready = data.get('player2_ready', False)
         return game
-
         
